@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Database, Activity, Edit2, Check, X, MessageSquare, Plus } from 'lucide-react';
 import { Container, StatCard, CyberButton, Grid, CyberCard } from '../components/ui';
 import { NeuralLoadGraph } from '../components/features/NeuralLoadGraph';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useChatStore } from '../stores/chatStore';
+import { useAuthStore } from '../stores/authStore';
 import { workspaceApi } from '../lib/api';
+import { realtimeService } from '../lib/realtime';
 import type { TimeSeriesData } from '../types';
 
 export default function WorkspaceDashboard() {
@@ -23,9 +25,12 @@ export default function WorkspaceDashboard() {
   const [editedName, setEditedName] = useState('');
   const [editedDescription, setEditedDescription] = useState('');
   const [neuralLoadData, setNeuralLoadData] = useState<TimeSeriesData[]>([]);
+  const { isAuthenticated } = useAuthStore();
+  const { loadWorkspaces } = useWorkspaceStore();
+  const { loadConversations } = useChatStore();
 
   // Fetch neural load data from API
-  const fetchNeuralLoadData = () => {
+  const fetchNeuralLoadData = useCallback(() => {
     if (id) {
       workspaceApi.getDashboard(id)
         .then((data) => {
@@ -39,7 +44,7 @@ export default function WorkspaceDashboard() {
           console.error('Failed to load neural load data:', err);
         });
     }
-  };
+  }, [id]);
 
   // Record load snapshot and fetch data
   const recordAndFetchLoad = () => {
@@ -71,6 +76,25 @@ export default function WorkspaceDashboard() {
 
     return () => clearInterval(interval);
   }, [id]);
+
+  // Real-time polling for dashboard stats (every 10 seconds)
+  const dashboardPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (!id || !isAuthenticated || !realtimeService.connected) return;
+
+    dashboardPollingRef.current = setInterval(() => {
+      // Refresh workspace stats and conversations
+      loadWorkspaces().catch(console.error);
+      loadConversations(id).catch(console.error);
+      fetchNeuralLoadData();
+    }, 10000);
+
+    return () => {
+      if (dashboardPollingRef.current) {
+        clearInterval(dashboardPollingRef.current);
+      }
+    };
+  }, [id, isAuthenticated, loadWorkspaces, loadConversations, fetchNeuralLoadData]);
 
   const handleStartEditName = () => {
     setEditedName(workspace?.name || '');

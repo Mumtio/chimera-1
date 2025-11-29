@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { User } from '../types';
 import { authApi } from '../lib/api';
+import { realtimeService } from '../lib/realtime';
 
 interface AuthState {
   user: User | null;
@@ -14,6 +15,7 @@ interface AuthState {
   logout: () => Promise<void>;
   demoLogin: () => void;
   clearError: () => void;
+  clearAllData: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -77,6 +79,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
+    // Stop all realtime polling immediately
+    realtimeService.disconnect();
+    
     try {
       await authApi.logout();
     } catch (error) {
@@ -86,6 +91,52 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.removeItem('auth_token');
       localStorage.removeItem('refresh_token');
       set({ user: null, isAuthenticated: false });
+      
+      // Clear all other stores to prevent data leakage
+      // Import stores dynamically to avoid circular dependencies
+      import('./workspaceStore').then(({ useWorkspaceStore }) => {
+        useWorkspaceStore.setState({
+          workspaces: [],
+          activeWorkspaceId: null,
+          previousWorkspaceId: null,
+          isTransitioning: false,
+          transitionProgress: 0,
+          isLoading: false,
+        });
+      });
+      
+      import('./chatStore').then(({ useChatStore }) => {
+        useChatStore.setState({
+          conversations: [],
+          activeConversationId: null,
+          autoStore: true,
+          isLoading: false,
+        });
+      });
+      
+      import('./memoryStore').then(({ useMemoryStore }) => {
+        useMemoryStore.setState({
+          memories: [],
+          searchQuery: '',
+          sortBy: 'recent',
+          selectedMemoryId: null,
+          isLoading: false,
+        });
+      });
+      
+      import('./invitationStore').then(({ useInvitationStore }) => {
+        useInvitationStore.setState({
+          invitations: [],
+          isLoading: false,
+        });
+      });
+      
+      import('./integrationStore').then(({ useIntegrationStore }) => {
+        useIntegrationStore.setState({
+          integrations: [],
+          isLoading: false,
+        });
+      });
     }
   },
 
@@ -102,5 +153,15 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   clearError: () => {
     set({ error: null });
+  },
+
+  clearAllData: () => {
+    // Stop realtime polling
+    realtimeService.disconnect();
+    
+    // Clear auth state
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+    set({ user: null, isAuthenticated: false, isLoading: false, error: null });
   },
 }));

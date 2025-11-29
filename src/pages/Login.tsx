@@ -1,21 +1,83 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 import { CyberButton, CyberInput, CyberCard, Container } from '../components/ui';
 import { useAuthStore } from '../stores/authStore';
+import { useWorkspaceStore } from '../stores/workspaceStore';
+import { useChatStore } from '../stores/chatStore';
+import { useMemoryStore } from '../stores/memoryStore';
+import { useInvitationStore } from '../stores/invitationStore';
+import { realtimeService } from '../lib/realtime';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, demoLogin, error, clearError } = useAuthStore();
+  const { login, demoLogin, error, isAuthenticated } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [sessionMessage, setSessionMessage] = useState<string | null>(null);
+
+  // Check if session was invalidated (another user logged in on different tab)
+  useEffect(() => {
+    const wasInvalidated = sessionStorage.getItem('session_invalidated');
+    if (wasInvalidated) {
+      setSessionMessage('Your session was ended because another user logged in on this browser.');
+      sessionStorage.removeItem('session_invalidated');
+    }
+  }, []);
+
+  // Clear all data when login page is loaded to prevent data leakage
+  useEffect(() => {
+    // Stop any existing polling
+    realtimeService.disconnect();
+    
+    // Clear all stores
+    useWorkspaceStore.setState({
+      workspaces: [],
+      activeWorkspaceId: null,
+      previousWorkspaceId: null,
+      isTransitioning: false,
+      transitionProgress: 0,
+      isLoading: false,
+    });
+    
+    useChatStore.setState({
+      conversations: [],
+      activeConversationId: null,
+      autoStore: true,
+      isLoading: false,
+    });
+    
+    useMemoryStore.setState({
+      memories: [],
+      searchQuery: '',
+      sortBy: 'recent',
+      selectedMemoryId: null,
+      isLoading: false,
+    });
+    
+    useInvitationStore.setState({
+      invitations: [],
+      isLoading: false,
+    });
+    
+    // Clear any stale tokens
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+  }, []);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/app');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleLogin = async () => {
     try {
       await login(email, password);
       // Redirect to /app which will load workspaces and redirect to first one
       navigate('/app');
-    } catch (error) {
+    } catch (err) {
       // Error is already set in the store
     }
   };
@@ -66,6 +128,12 @@ export default function Login() {
                 onChange={setPassword}
               />
             </div>
+
+            {sessionMessage && (
+              <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-3 text-yellow-400 text-sm">
+                {sessionMessage}
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm">

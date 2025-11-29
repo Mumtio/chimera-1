@@ -571,4 +571,53 @@ export const settingsApi = {
   },
 };
 
+// ============================================
+// MCP (Model Context Protocol) API
+// ============================================
+
+export interface McpRememberRequest {
+  text: string;
+  conversation_id: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
+}
+
+export interface McpSearchRequest {
+  query: string;
+  top_k?: number;
+  conversation_id?: string;
+}
+
+export interface McpInjectRequest {
+  conversation_id: string;
+  max_memories?: number;
+}
+
+export const mcpApi = {
+  remember: async (data: McpRememberRequest): Promise<any> => {
+    return apiRequest('/mcp/remember', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  search: async (data: McpSearchRequest): Promise<any> => {
+    return apiRequest('/mcp/search', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  inject: async (data: McpInjectRequest): Promise<any> => {
+    return apiRequest('/mcp/inject', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  listMemories: async (conversationId: string, limit = 20, offset = 0): Promise<any> => {
+    return apiRequest(`/mcp/listMemories?conversation_id=${conversationId}&limit=${limit}&offset=${offset}`);
+  },
+};
+
 export { API_BASE_URL };

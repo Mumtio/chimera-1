@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserPlus, Trash2, Shield, Eye, User, Circle } from 'lucide-react';
 import { CyberButton } from '../components/ui/CyberButton';
 import { CyberCard } from '../components/ui/CyberCard';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useAuthStore } from '../stores/authStore';
 import { teamApi } from '../lib/api';
+import { realtimeService } from '../lib/realtime';
 import type { TeamMember } from '../types';
 
 interface TeamMemberWithUser extends TeamMember {
@@ -27,18 +28,37 @@ const Team: React.FC = () => {
   const currentWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
   const isOwner = currentWorkspace?.ownerId === currentUser?.id;
 
-  // Fetch team members from API
-  useEffect(() => {
-    if (activeWorkspaceId) {
-      teamApi.list(activeWorkspaceId)
-        .then((response) => {
-          setTeamMembers(response.members || []);
-        })
-        .catch((err) => {
-          console.error('Failed to load team members:', err);
-        });
+  // Fetch team members function
+  const fetchTeamMembers = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+    try {
+      const response = await teamApi.list(activeWorkspaceId);
+      setTeamMembers(response.members || []);
+    } catch (err) {
+      console.error('Failed to load team members:', err);
     }
   }, [activeWorkspaceId]);
+
+  // Fetch team members from API on mount and workspace change
+  useEffect(() => {
+    fetchTeamMembers();
+  }, [fetchTeamMembers]);
+
+  // Real-time polling for team updates (every 8 seconds)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (!activeWorkspaceId || !realtimeService.connected) return;
+
+    pollingRef.current = setInterval(() => {
+      fetchTeamMembers();
+    }, 8000);
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, [activeWorkspaceId, fetchTeamMembers]);
 
   // Build display members including owner
   const displayMembers = React.useMemo(() => {

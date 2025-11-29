@@ -5,11 +5,13 @@ import { Send, Database, Zap, Edit2, X } from 'lucide-react';
 import { useChatStore } from '../stores/chatStore';
 import { useMemoryStore } from '../stores/memoryStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
+import { useAuthStore } from '../stores/authStore';
 import { ChatMessage } from '../components/features/ChatMessage';
 import { CyberButton } from '../components/ui/CyberButton';
 import { CyberCard } from '../components/ui/CyberCard';
 import { SynapseSpark } from '../components/animations/SynapseSpark';
 import { MemoryInjectionAnimation } from '../components/animations/MemoryInjectionAnimation';
+import { useMessagePolling } from '../hooks/useRealtime';
 
 const Chat: React.FC = () => {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -39,10 +41,14 @@ const Chat: React.FC = () => {
 
   const { getMemoriesByWorkspace, getMemoryById } = useMemoryStore();
   const { getActiveWorkspace } = useWorkspaceStore();
+  const { isAuthenticated } = useAuthStore();
 
   const conversation = conversationId ? getConversationById(conversationId) : null;
   const activeWorkspace = getActiveWorkspace();
   const workspaceMemories = activeWorkspace ? getMemoriesByWorkspace(activeWorkspace.id) : [];
+
+  // Enable real-time message polling for collaborative chat
+  useMessagePolling(conversationId || null, isAuthenticated && conversation?.status === 'active');
 
   // Load conversation messages when conversation ID changes
   useEffect(() => {

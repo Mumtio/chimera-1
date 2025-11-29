@@ -1,22 +1,74 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
 import { CyberButton, CyberInput, CyberCard, Container } from '../components/ui';
 import { useAuthStore } from '../stores/authStore';
+import { useWorkspaceStore } from '../stores/workspaceStore';
+import { useChatStore } from '../stores/chatStore';
+import { useMemoryStore } from '../stores/memoryStore';
+import { useInvitationStore } from '../stores/invitationStore';
+import { realtimeService } from '../lib/realtime';
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { signup, error } = useAuthStore();
+  const { signup, error, isAuthenticated } = useAuthStore();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // Clear all data when signup page is loaded to prevent data leakage
+  useEffect(() => {
+    // Stop any existing polling
+    realtimeService.disconnect();
+    
+    // Clear all stores
+    useWorkspaceStore.setState({
+      workspaces: [],
+      activeWorkspaceId: null,
+      previousWorkspaceId: null,
+      isTransitioning: false,
+      transitionProgress: 0,
+      isLoading: false,
+    });
+    
+    useChatStore.setState({
+      conversations: [],
+      activeConversationId: null,
+      autoStore: true,
+      isLoading: false,
+    });
+    
+    useMemoryStore.setState({
+      memories: [],
+      searchQuery: '',
+      sortBy: 'recent',
+      selectedMemoryId: null,
+      isLoading: false,
+    });
+    
+    useInvitationStore.setState({
+      invitations: [],
+      isLoading: false,
+    });
+    
+    // Clear any stale tokens
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+  }, []);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/app');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSignup = async () => {
     try {
       await signup(name, email, password);
       // Redirect to /app which will load workspaces and redirect to first one
       navigate('/app');
-    } catch (error) {
+    } catch (err) {
       // Error is already set in the store
     }
   };

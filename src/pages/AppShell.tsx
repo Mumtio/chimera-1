@@ -1,5 +1,5 @@
-import { Outlet, useLocation } from 'react-router-dom';
-import { Suspense, useEffect } from 'react';
+import { Outlet } from 'react-router-dom';
+import { Suspense, useEffect, useState } from 'react';
 import { LeftSidebar } from '../components/layout/LeftSidebar';
 import { TopBar } from '../components/layout/TopBar';
 import { RightSidebar } from '../components/layout/RightSidebar';
@@ -9,10 +9,17 @@ import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useIntegrationStore } from '../stores/integrationStore';
 import { useChatStore } from '../stores/chatStore';
 import { useMemoryStore } from '../stores/memoryStore';
-import { useState } from 'react';
+import { useAuthStore } from '../stores/authStore';
+import { 
+  useRealtimeConnection,
+  useWorkspacePolling,
+  useConversationPolling,
+  useMemoryPolling,
+  useInvitationPolling,
+} from '../hooks/useRealtime';
+import { useAuthSync, useTokenVerification } from '../hooks/useAuthSync';
 
 export default function AppShell() {
-  const location = useLocation();
   const { 
     createWorkspace, 
     isTransitioning, 
@@ -25,11 +32,30 @@ export default function AppShell() {
   const { loadIntegrations } = useIntegrationStore();
   const { loadConversations } = useChatStore();
   const { loadMemories } = useMemoryStore();
+  const { isAuthenticated } = useAuthStore();
   const [showNewWorkspaceModal, setShowNewWorkspaceModal] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Get auth token for realtime connection
+  const authToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+
+  // Cross-tab authentication synchronization
+  // Detects when another tab logs in as a different user and clears data
+  useAuthSync();
+  useTokenVerification(3000); // Check every 3 seconds as fallback
+
+  // Initialize realtime connection
+  useRealtimeConnection(isAuthenticated, authToken);
+
   // Get active workspace
   const activeWorkspace = getActiveWorkspace();
+
+  // Enable realtime polling for collaborative updates
+  useWorkspacePolling(isAuthenticated && isInitialized);
+  useConversationPolling(activeWorkspace?.id || null, isAuthenticated && isInitialized);
+  useMemoryPolling(activeWorkspace?.id || null, isAuthenticated && isInitialized);
+  useInvitationPolling(isAuthenticated && isInitialized);
+
   const previousWorkspace = previousWorkspaceId ? getWorkspaceById(previousWorkspaceId) : null;
 
   // Load initial data on mount

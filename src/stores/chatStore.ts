@@ -43,14 +43,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ isLoading: true });
     try {
       const response = await conversationApi.list(workspaceId);
-      const conversations = response.conversations.map((conv: any) => ({
-        ...conv,
-        messages: [],
-        status: conv.status as 'active' | 'completed' | 'archived',
-        createdAt: new Date(conv.createdAt),
-        updatedAt: new Date(conv.lastUpdated || conv.updatedAt || conv.createdAt),
-        messageCount: conv.messageCount || 0,
-      }));
+      const existingConversations = get().conversations;
+      
+      const conversations = response.conversations.map((conv: any) => {
+        // Preserve existing messages and injectedMemories if conversation already exists
+        const existing = existingConversations.find(c => c.id === conv.id);
+        return {
+          ...conv,
+          // Keep existing messages instead of resetting to empty array
+          messages: existing?.messages || [],
+          injectedMemories: existing?.injectedMemories || conv.injectedMemories || [],
+          status: conv.status as 'active' | 'completed' | 'archived',
+          createdAt: new Date(conv.createdAt),
+          updatedAt: new Date(conv.lastUpdated || conv.updatedAt || conv.createdAt),
+          messageCount: conv.messageCount || 0,
+        };
+      });
       
       set({ conversations, isLoading: false });
     } catch (error) {
@@ -134,19 +142,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadConversationMessages: async (conversationId: string) => {
     try {
       const response = await conversationApi.get(conversationId);
-      set(state => ({
-        conversations: state.conversations.map(conv =>
-          conv.id === conversationId ? {
-            ...conv,
-            status: response.status as 'active' | 'completed' | 'archived',
-            messages: response.messages.map(msg => ({
-              ...msg,
-              timestamp: new Date(msg.timestamp),
-            })),
-            injectedMemories: response.injectedMemories,
-          } : conv
-        ),
+      const newMessages = response.messages.map(msg => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp),
       }));
+      
+      set(state => {
+        const existingConv = state.conversations.find(c => c.id === conversationId);
+        
+        // Skip update if messages haven't changed (compare by length and last message id)
+        if (existingConv) {
+          const existingMsgs = existingConv.messages.filter(m => !m.id.startsWith('temp-'));
+          const hasChanges = 
+            existingMsgs.length !== newMessages.length ||
+            (existingMsgs.length > 0 && newMessages.length > 0 && 
+             existingMsgs[existingMsgs.length - 1]?.id !== newMessages[newMessages.length - 1]?.id);
+          
+          if (!hasChanges) {
+            // No changes, skip update to prevent re-render
+            return state;
+          }
+        }
+        
+        return {
+          conversations: state.conversations.map(conv =>
+            conv.id === conversationId ? {
+              ...conv,
+              status: response.status as 'active' | 'completed' | 'archived',
+              messages: newMessages,
+              injectedMemories: response.injectedMemories,
+            } : conv
+          ),
+        };
+      });
     } catch (error) {
       console.error('Failed to load conversation messages:', error);
     }
