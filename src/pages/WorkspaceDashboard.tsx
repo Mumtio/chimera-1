@@ -41,8 +41,24 @@ export default function WorkspaceDashboard() {
     }
   };
 
+  // Record load snapshot and fetch data
+  const recordAndFetchLoad = () => {
+    if (!id) return;
+    workspaceApi.recordLoad(id)
+      .then(() => {
+        fetchNeuralLoadData();
+      })
+      .catch((err) => {
+        console.error('Failed to record load snapshot:', err);
+      });
+  };
+
+  // Initial load: record snapshot immediately and fetch data
   useEffect(() => {
-    fetchNeuralLoadData();
+    if (id) {
+      // Record a snapshot immediately on page load
+      recordAndFetchLoad();
+    }
   }, [id]);
 
   // Record load snapshot every 5 minutes and refresh data
@@ -50,13 +66,7 @@ export default function WorkspaceDashboard() {
     if (!id) return;
 
     const interval = setInterval(() => {
-      workspaceApi.recordLoad(id)
-        .then(() => {
-          fetchNeuralLoadData();
-        })
-        .catch((err) => {
-          console.error('Failed to record load snapshot:', err);
-        });
+      recordAndFetchLoad();
     }, 5 * 60 * 1000); // 5 minutes
 
     return () => clearInterval(interval);

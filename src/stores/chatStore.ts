@@ -43,12 +43,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ isLoading: true });
     try {
       const response = await conversationApi.list(workspaceId);
-      const conversations = response.conversations.map(conv => ({
+      const conversations = response.conversations.map((conv: any) => ({
         ...conv,
         messages: [],
         status: conv.status as 'active' | 'completed' | 'archived',
         createdAt: new Date(conv.createdAt),
-        updatedAt: new Date(conv.updatedAt),
+        updatedAt: new Date(conv.lastUpdated || conv.updatedAt || conv.createdAt),
+        messageCount: conv.messageCount || 0,
       }));
       
       set({ conversations, isLoading: false });

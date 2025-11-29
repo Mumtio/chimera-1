@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { settingsApi } from '../lib/api';
 
 export interface UserSettings {
   profile: {
@@ -14,12 +15,17 @@ export interface UserSettings {
 
 interface SettingsState {
   settings: UserSettings;
-  
+  isLoading: boolean;
+  error: string | null;
+
   // Actions
-  updateProfile: (name: string, email: string) => void;
-  updateMemoryRetention: (autoStore: boolean, retentionPeriod: string) => void;
-  exportData: () => void;
-  deleteAccount: () => void;
+  fetchSettings: () => Promise<void>;
+  updateProfile: (name: string, email: string) => Promise<void>;
+  updateMemoryRetention: (autoStore: boolean, retentionPeriod: string) => Promise<void>;
+  exportData: () => Promise<void>;
+  deleteAccount: () => Promise<boolean>;
+  setSettings: (settings: UserSettings) => void;
+  clearError: () => void;
 }
 
 const defaultSettings: UserSettings = {
@@ -35,49 +41,94 @@ const defaultSettings: UserSettings = {
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       settings: defaultSettings,
+      isLoading: false,
+      error: null,
 
-      updateProfile: (name: string, email: string) => {
-        set((state) => ({
-          settings: {
-            ...state.settings,
-            profile: { name, email },
-          },
-        }));
-      },
-
-      updateMemoryRetention: (autoStore: boolean, retentionPeriod: string) => {
-        set((state) => ({
-          settings: {
-            ...state.settings,
-            memoryRetention: { autoStore, retentionPeriod },
-          },
-        }));
-      },
-
-      exportData: () => {
-        const state = get();
-        const dataStr = JSON.stringify(state.settings, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `chimera-protocol-data-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      },
-
-      deleteAccount: () => {
-        if (confirm('Are you sure you want to delete your Chimera Protocol account? This action cannot be undone.')) {
-          // In a real app, this would call an API to delete the account
-          console.log('Account deletion requested');
-          // Reset settings to default
-          set({ settings: defaultSettings });
-          // In a real app, would also logout and redirect
+      fetchSettings: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const data = await settingsApi.get();
+          set({
+            settings: {
+              profile: data.profile,
+              memoryRetention: data.memoryRetention,
+            },
+            isLoading: false,
+          });
+        } catch (error: any) {
+          set({ error: error.message || 'Failed to fetch settings', isLoading: false });
         }
+      },
+
+      updateProfile: async (name: string, email: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          const data = await settingsApi.updateProfile({ name, email });
+          set({
+            settings: {
+              profile: data.profile,
+              memoryRetention: data.memoryRetention,
+            },
+            isLoading: false,
+          });
+        } catch (error: any) {
+          set({ error: error.message || 'Failed to update profile', isLoading: false });
+          throw error;
+        }
+      },
+
+      updateMemoryRetention: async (autoStore: boolean, retentionPeriod: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          const data = await settingsApi.updateMemoryRetention({ autoStore, retentionPeriod });
+          set({
+            settings: {
+              profile: data.profile,
+              memoryRetention: data.memoryRetention,
+            },
+            isLoading: false,
+          });
+        } catch (error: any) {
+          set({ error: error.message || 'Failed to update memory retention', isLoading: false });
+          throw error;
+        }
+      },
+
+      exportData: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          await settingsApi.exportData();
+          set({ isLoading: false });
+        } catch (error: any) {
+          set({ error: error.message || 'Failed to export data', isLoading: false });
+          throw error;
+        }
+      },
+
+      deleteAccount: async () => {
+        if (!confirm('Are you sure you want to delete your Chimera Protocol account? This action cannot be undone.')) {
+          return false;
+        }
+        
+        set({ isLoading: true, error: null });
+        try {
+          await settingsApi.deleteAccount();
+          set({ settings: defaultSettings, isLoading: false });
+          return true;
+        } catch (error: any) {
+          set({ error: error.message || 'Failed to delete account', isLoading: false });
+          throw error;
+        }
+      },
+
+      setSettings: (settings: UserSettings) => {
+        set({ settings });
+      },
+
+      clearError: () => {
+        set({ error: null });
       },
     }),
     {

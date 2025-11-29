@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MessageSquare, Calendar, Brain } from 'lucide-react';
+import { Plus, MessageSquare, Calendar, Brain, Trash2 } from 'lucide-react';
 import { useChatStore } from '../stores/chatStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useIntegrationStore } from '../stores/integrationStore';
@@ -9,7 +9,7 @@ import type { CognitiveModel } from '../types';
 
 export default function ChatList() {
   const navigate = useNavigate();
-  const { conversations } = useChatStore();
+  const { conversations, deleteConversation } = useChatStore();
   const { activeWorkspaceId } = useWorkspaceStore();
   const { getConnectedModels } = useIntegrationStore();
   const [connectedModels, setConnectedModels] = useState<CognitiveModel[]>([]);
@@ -115,14 +115,28 @@ export default function ChatList() {
 
                 {/* Stats */}
                 <div className="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-neon-green/10">
-                  <span>{conversation.messages.length} messages</span>
-                  <span className={`px-2 py-1 rounded ${
-                    conversation.status === 'active' 
-                      ? 'bg-neon-green/10 text-neon-green' 
-                      : 'bg-gray-700 text-gray-400'
-                  }`}>
-                    {conversation.status}
-                  </span>
+                  <span>{conversation.messages?.length || (conversation as any).messageCount || 0} messages</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded ${
+                      conversation.status === 'active' 
+                        ? 'bg-neon-green/10 text-neon-green' 
+                        : 'bg-gray-700 text-gray-400'
+                    }`}>
+                      {conversation.status}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete "${conversation.title}"? This cannot be undone.`)) {
+                          deleteConversation(conversation.id);
+                        }
+                      }}
+                      className="p-1.5 hover:bg-error-red/20 rounded transition-colors group"
+                      title="Delete conversation"
+                    >
+                      <Trash2 size={14} className="text-gray-500 group-hover:text-error-red" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </CyberCard>

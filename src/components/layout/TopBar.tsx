@@ -34,9 +34,9 @@ export function TopBar() {
       {/* Left: Logo and Workspace Name */}
       <div className="flex items-center gap-6 relative z-10">
         <Link 
-          to="/" 
+          to={user ? "/app" : "/"} 
           className="text-neon-green font-cyber text-xl hover:text-neon-green/80 transition-colors flex items-center gap-2 focus-visible-ring"
-          aria-label="Chimera Protocol - Go to home page"
+          aria-label={user ? "Chimera Protocol - Go to dashboard" : "Chimera Protocol - Go to home page"}
         >
           <span className="text-2xl" aria-hidden="true">⚡</span>
           <span>CHIMERA</span>

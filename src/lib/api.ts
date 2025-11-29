@@ -485,31 +485,89 @@ export const invitationApi = {
 // SETTINGS API
 // ============================================
 
+export interface SettingsResponse {
+  profile: {
+    name: string;
+    email: string;
+  };
+  memoryRetention: {
+    autoStore: boolean;
+    retentionPeriod: string;
+  };
+}
+
+export interface CleanupInfoResponse {
+  cleanup_date: string | null;
+  days_remaining: number | null;
+  hours_remaining: number | null;
+  minutes_remaining: number | null;
+  total_seconds_remaining: number | null;
+  is_indefinite: boolean;
+  retention_period: string;
+}
+
+export interface CleanupResultResponse {
+  workspaces_deleted: number;
+  conversations_deleted: number;
+  memories_deleted: number;
+  messages_deleted: number;
+  cleanup_time: string;
+}
+
 export const settingsApi = {
-  get: async (): Promise<any> => {
+  get: async (): Promise<SettingsResponse> => {
     return apiRequest('/settings');
   },
 
-  updateProfile: async (data: { name?: string; email?: string }): Promise<any> => {
+  updateProfile: async (data: { name?: string; email?: string }): Promise<SettingsResponse> => {
     return apiRequest('/settings/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
 
-  updateMemoryRetention: async (data: { autoStore?: boolean; retentionPeriod?: string }): Promise<any> => {
+  updateMemoryRetention: async (data: { autoStore?: boolean; retentionPeriod?: string }): Promise<SettingsResponse> => {
     return apiRequest('/settings/memory-retention', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
 
-  exportData: async (): Promise<Blob> => {
+  getCleanupInfo: async (): Promise<CleanupInfoResponse> => {
+    return apiRequest('/settings/cleanup-info');
+  },
+
+  triggerCleanup: async (): Promise<CleanupResultResponse> => {
+    return apiRequest('/settings/cleanup', {
+      method: 'POST',
+    });
+  },
+
+  exportData: async (): Promise<void> => {
     const token = getAuthToken();
     const response = await fetch(`${API_BASE_URL}/export`, {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     });
-    return response.blob();
+    
+    if (!response.ok) {
+      throw new Error('Failed to export data');
+    }
+    
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `chimera_data_export_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
+
+  deleteAccount: async (): Promise<void> => {
+    return apiRequest('/account', {
+      method: 'DELETE',
+    });
   },
 };
 

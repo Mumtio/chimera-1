@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
-import { UserPlus, MoreVertical, Shield, Eye, User, Circle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { UserPlus, Trash2, Shield, Eye, User, Circle } from 'lucide-react';
 import { CyberButton } from '../components/ui/CyberButton';
 import { CyberCard } from '../components/ui/CyberCard';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useAuthStore } from '../stores/authStore';
-import { dummyUsers } from '../data/dummyData';
 import { teamApi } from '../lib/api';
 import type { TeamMember } from '../types';
+
+interface TeamMemberWithUser extends TeamMember {
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
 
 const Team: React.FC = () => {
   const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
@@ -15,27 +22,57 @@ const Team: React.FC = () => {
   
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberWithUser[]>([]);
 
   const currentWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
-  const teamMembers = currentWorkspace?.members || [];
-  
-  // Add current user to team if not already there
-  const isCurrentUserInTeam = teamMembers.some(m => m.userId === currentUser?.id);
-  const displayMembers = isCurrentUserInTeam ? teamMembers : [
-    ...teamMembers,
-    {
-      id: 'current-user',
-      userId: currentUser?.id || '',
-      workspaceId: activeWorkspaceId || '',
-      role: 'admin' as const,
-      status: 'online' as const,
-      joinedAt: new Date(),
-    }
-  ];
+  const isOwner = currentWorkspace?.ownerId === currentUser?.id;
 
-  const getUserInfo = (userId: string) => {
-    return dummyUsers.find(u => u.id === userId);
+  // Fetch team members from API
+  useEffect(() => {
+    if (activeWorkspaceId) {
+      teamApi.list(activeWorkspaceId)
+        .then((response) => {
+          setTeamMembers(response.members || []);
+        })
+        .catch((err) => {
+          console.error('Failed to load team members:', err);
+        });
+    }
+  }, [activeWorkspaceId]);
+
+  // Build display members including owner
+  const displayMembers = React.useMemo(() => {
+    const members: TeamMemberWithUser[] = [...teamMembers];
+    
+    // Add current user (owner) if not in the list
+    const isCurrentUserInTeam = members.some(m => m.userId === currentUser?.id);
+    if (!isCurrentUserInTeam && currentUser) {
+      members.unshift({
+        id: 'owner',
+        userId: currentUser.id,
+        workspaceId: activeWorkspaceId || '',
+        role: 'admin',
+        status: 'online',
+        joinedAt: new Date(),
+        user: {
+          id: currentUser.id,
+          name: currentUser.name,
+          email: currentUser.email,
+        },
+      });
+    }
+    
+    return members;
+  }, [teamMembers, currentUser, activeWorkspaceId]);
+
+  const getUserInfo = (member: TeamMemberWithUser) => {
+    if (member.user) {
+      return member.user;
+    }
+    if (member.userId === currentUser?.id) {
+      return currentUser;
+    }
+    return null;
   };
 
   const getStatusColor = (status: TeamMember['status']) => {
@@ -95,17 +132,20 @@ const Team: React.FC = () => {
     }
   };
 
-  const handleChangeRole = (memberId: string, newRole: TeamMember['role']) => {
-    // In a real app, this would update the member's role
-    console.log('Changing role for', memberId, 'to', newRole);
-    setActionMenuOpen(null);
-  };
 
-  const handleRemoveMember = (memberId: string) => {
-    // In a real app, this would remove the member
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!activeWorkspaceId) return;
+    
     if (confirm('Are you sure you want to remove this team member?')) {
-      console.log('Removing member:', memberId);
-      setActionMenuOpen(null);
+      try {
+        await teamApi.remove(activeWorkspaceId, userId);
+        // Refresh team members
+        const response = await teamApi.list(activeWorkspaceId);
+        setTeamMembers(response.members || []);
+      } catch (error: any) {
+        alert(error.message || 'Failed to remove member');
+      }
     }
   };
 
@@ -168,7 +208,7 @@ const Team: React.FC = () => {
               </thead>
               <tbody>
                 {displayMembers.map((member) => {
-                  const userInfo = member.userId === currentUser?.id ? currentUser : getUserInfo(member.userId);
+                  const userInfo = getUserInfo(member);
                   if (!userInfo) return null;
                   const isCurrentUser = member.userId === currentUser?.id;
 
@@ -233,53 +273,18 @@ const Team: React.FC = () => {
                         </span>
                       </td>
 
-                      {/* Actions */}
+                      {/* Actions - only owner can remove members */}
                       <td className="py-4 px-4 text-right">
-                        <div className="relative inline-block">
+                        {isOwner && !isCurrentUser && (
                           <button
-                            onClick={() => setActionMenuOpen(actionMenuOpen === member.id ? null : member.id)}
-                            className="p-2 hover:bg-deep-teal/30 rounded transition-colors"
-                            aria-label="Member actions"
+                            onClick={() => handleRemoveMember(member.userId)}
+                            className="p-2 hover:bg-error-red/20 rounded transition-colors group"
+                            aria-label="Remove member"
+                            title="Remove member"
                           >
-                            <MoreVertical size={18} className="text-neon-green" />
+                            <Trash2 size={18} className="text-error-red group-hover:text-red-400" />
                           </button>
-
-                          {/* Action Dropdown Menu */}
-                          {actionMenuOpen === member.id && (
-                            <div className="absolute right-0 mt-2 w-48 bg-black border-2 border-neon-green angular-frame shadow-neon z-20">
-                              <div className="py-2">
-                                <button
-                                  onClick={() => handleChangeRole(member.id, 'admin')}
-                                  className="w-full text-left px-4 py-2 text-sm text-white hover:bg-deep-teal/30 transition-colors"
-                                  disabled={member.role === 'admin'}
-                                >
-                                  Change to Admin
-                                </button>
-                                <button
-                                  onClick={() => handleChangeRole(member.id, 'researcher')}
-                                  className="w-full text-left px-4 py-2 text-sm text-white hover:bg-deep-teal/30 transition-colors"
-                                  disabled={member.role === 'researcher'}
-                                >
-                                  Change to Researcher
-                                </button>
-                                <button
-                                  onClick={() => handleChangeRole(member.id, 'observer')}
-                                  className="w-full text-left px-4 py-2 text-sm text-white hover:bg-deep-teal/30 transition-colors"
-                                  disabled={member.role === 'observer'}
-                                >
-                                  Change to Observer
-                                </button>
-                                <div className="border-t border-deep-teal my-2"></div>
-                                <button
-                                  onClick={() => handleRemoveMember(member.id)}
-                                  className="w-full text-left px-4 py-2 text-sm text-error-red hover:bg-error-red/10 transition-colors"
-                                >
-                                  Remove Member
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </td>
                     </tr>
                   );
