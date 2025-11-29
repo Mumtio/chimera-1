@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ArrowLeft, Database, Zap, Edit2 } from 'lucide-react';
+import { Send, Database, Zap, Edit2, X } from 'lucide-react';
 import { useChatStore } from '../stores/chatStore';
 import { useMemoryStore } from '../stores/memoryStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
@@ -30,10 +30,11 @@ const Chat: React.FC = () => {
     unpinMessage,
     deleteMessage,
     injectMemory,
-    autoStore,
-    setAutoStore,
+    toggleInjectedMemory,
     getMessageById,
     loadConversationMessages,
+    closeConversation,
+    reopenConversation,
   } = useChatStore();
 
   const { getMemoriesByWorkspace, getMemoryById } = useMemoryStore();
@@ -49,6 +50,15 @@ const Chat: React.FC = () => {
       loadConversationMessages(conversationId);
     }
   }, [conversationId, loadConversationMessages]);
+
+  // Auto-reopen conversation when page is opened if it was completed
+  useEffect(() => {
+    if (conversation && conversation.status !== 'active' && conversationId) {
+      reopenConversation(conversationId).catch(err => {
+        console.error('Failed to reopen conversation:', err);
+      });
+    }
+  }, [conversation?.status, conversationId, reopenConversation]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -125,8 +135,35 @@ const Chat: React.FC = () => {
   }, [conversationId, injectMemory, getMemoryById]);
 
   const isMemoryInjected = useCallback((memoryId: string) => {
-    return conversation?.injectedMemories.includes(memoryId) || false;
+    return conversation?.injectedMemories?.some(m => m.id === memoryId) || false;
   }, [conversation?.injectedMemories]);
+
+  const isMemoryActive = useCallback((memoryId: string) => {
+    const injected = conversation?.injectedMemories?.find(m => m.id === memoryId);
+    return injected?.isActive ?? false;
+  }, [conversation?.injectedMemories]);
+
+  const handleToggleMemory = useCallback((memoryId: string) => {
+    if (conversationId) {
+      toggleInjectedMemory(conversationId, memoryId);
+    }
+  }, [conversationId, toggleInjectedMemory]);
+
+  const handleCloseConversation = useCallback(async () => {
+    if (!conversationId || !activeWorkspace) return;
+    
+    if (confirm('Close this conversation? It will be summarized and saved to memory.')) {
+      try {
+        await closeConversation(conversationId);
+        navigate(`/app/workspace/${activeWorkspace.id}`);
+      } catch (error) {
+        console.error('Failed to close conversation:', error);
+        alert('Failed to close conversation. Please try again.');
+      }
+    }
+  }, [conversationId, activeWorkspace, closeConversation, navigate]);
+
+
 
   return (
     <>
@@ -213,16 +250,19 @@ const Chat: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Link to={`/app/workspace/${activeWorkspace?.id}`}>
-                <CyberButton variant="ghost" size="sm">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Dashboard
-                </CyberButton>
-              </Link>
+              <CyberButton 
+                variant="danger" 
+                size="sm"
+                onClick={handleCloseConversation}
+                title="Close conversation and save to memory"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Close Conversation
+              </CyberButton>
               <Link to="/app/memories">
                 <CyberButton variant="secondary" size="sm">
                   <Database className="w-4 h-4 mr-2" />
-                  Memory Library
+                  Memory Bank
                 </CyberButton>
               </Link>
             </div>
@@ -230,7 +270,7 @@ const Chat: React.FC = () => {
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 bg-black/30 scanlines">
+        <div className="flex-1 overflow-y-auto p-6 bg-black/30 scanlines min-h-0">
           {conversation.messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -292,27 +332,8 @@ const Chat: React.FC = () => {
             </CyberButton>
           </div>
           
-          {/* Auto-Store Toggle */}
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-deep-teal/50">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-400">Auto-Store Memories:</span>
-              <button
-                onClick={() => setAutoStore(!autoStore)}
-                className={`
-                  relative w-12 h-6 rounded-full transition-colors duration-300
-                  ${autoStore ? 'bg-neon-green' : 'bg-gray-700'}
-                `}
-              >
-                <motion.div
-                  className="absolute top-1 w-4 h-4 bg-black rounded-full"
-                  animate={{ left: autoStore ? '28px' : '4px' }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                />
-              </button>
-              <span className={`text-sm font-mono ${autoStore ? 'text-neon-green' : 'text-gray-600'}`}>
-                {autoStore ? 'ENABLED' : 'DISABLED'}
-              </span>
-            </div>
+          {/* Injected Memories Count */}
+          <div className="flex items-center justify-end mt-3 pt-3 border-t border-deep-teal/50">
             <div className="text-xs text-gray-600 font-mono">
               {conversation.injectedMemories?.length || 0} memories injected
             </div>
@@ -343,26 +364,32 @@ const Chat: React.FC = () => {
           ) : (
             workspaceMemories.map((memory) => {
               const isInjected = isMemoryInjected(memory.id);
+              const isActive = isMemoryActive(memory.id);
               return (
                 <div key={memory.id} className="relative">
                   <motion.div
                     className={`
-                      p-3 border-2 rounded cursor-pointer
+                      p-3 border-2 rounded
                       transition-all duration-300
                       ${isInjected 
-                        ? 'border-neon-green bg-neon-green/10' 
-                        : 'border-deep-teal hover:border-neon-green hover:shadow-neon'
+                        ? isActive
+                          ? 'border-neon-green bg-neon-green/10'
+                          : 'border-yellow-500 bg-yellow-500/10'
+                        : 'border-deep-teal hover:border-neon-green hover:shadow-neon cursor-pointer'
                       }
                     `}
                     onClick={() => !isInjected && handleInjectMemory(memory.id)}
                     whileHover={!isInjected ? { scale: 1.02 } : {}}
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <h3 className="text-sm font-bold text-neon-green line-clamp-1">
+                      <h3 className={`text-sm font-bold line-clamp-1 ${isInjected && !isActive ? 'text-yellow-500' : 'text-neon-green'}`}>
                         {memory.title}
                       </h3>
                       {isInjected && (
-                        <Zap className="w-4 h-4 text-neon-green flex-shrink-0" fill="currentColor" />
+                        <Zap 
+                          className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-neon-green' : 'text-yellow-500'}`} 
+                          fill={isActive ? 'currentColor' : 'none'} 
+                        />
                       )}
                     </div>
                     <p className="text-xs text-gray-400 line-clamp-2">
@@ -378,6 +405,25 @@ const Chat: React.FC = () => {
                         </span>
                       ))}
                     </div>
+                    {/* Toggle button for injected memories */}
+                    {isInjected && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleMemory(memory.id);
+                        }}
+                        className={`
+                          mt-2 w-full py-1 text-xs font-mono rounded
+                          transition-colors duration-200
+                          ${isActive 
+                            ? 'bg-neon-green/20 text-neon-green hover:bg-neon-green/30' 
+                            : 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'
+                          }
+                        `}
+                      >
+                        {isActive ? '● ACTIVE' : '○ PAUSED'}
+                      </button>
+                    )}
                   </motion.div>
                   {sparkTrigger === memory.id && <SynapseSpark trigger={true} />}
                 </div>

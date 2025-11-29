@@ -20,6 +20,9 @@ interface WorkspaceState {
   updateTransitionProgress: (progress: number) => void;
   completeTransition: () => void;
   
+  // Stats
+  updateWorkspaceStats: (id: string, statUpdates: Partial<Workspace['stats']>) => void;
+  
   // Selectors
   getActiveWorkspace: () => Workspace | null;
   getWorkspaceById: (id: string) => Workspace | undefined;
@@ -164,6 +167,19 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   completeTransition: () => {
     set({ isTransitioning: false, transitionProgress: 0 });
+  },
+
+  updateWorkspaceStats: (id: string, statUpdates: Partial<Workspace['stats']>) => {
+    set(state => ({
+      workspaces: state.workspaces.map(ws =>
+        ws.id === id
+          ? {
+              ...ws,
+              stats: { ...ws.stats, ...statUpdates },
+            }
+          : ws
+      ),
+    }));
   },
 
   getActiveWorkspace: () => {

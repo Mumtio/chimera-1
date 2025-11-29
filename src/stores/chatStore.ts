@@ -21,6 +21,9 @@ interface ChatState {
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
   injectMemory: (conversationId: string, memoryId: string) => Promise<void>;
   removeInjectedMemory: (conversationId: string, memoryId: string) => Promise<void>;
+  toggleInjectedMemory: (conversationId: string, memoryId: string) => Promise<void>;
+  closeConversation: (conversationId: string) => Promise<void>;
+  reopenConversation: (conversationId: string) => Promise<void>;
   setAutoStore: (enabled: boolean) => void;
   
   // Selectors
@@ -43,6 +46,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const conversations = response.conversations.map(conv => ({
         ...conv,
         messages: [],
+        status: conv.status as 'active' | 'completed' | 'archived',
         createdAt: new Date(conv.createdAt),
         updatedAt: new Date(conv.updatedAt),
       }));
@@ -59,6 +63,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const response = await conversationApi.create(workspaceId, title || 'New Conversation', modelId);
       const newConversation: Conversation = {
         ...response,
+        status: response.status as 'active' | 'completed' | 'archived',
         messages: response.messages.map(msg => ({
           ...msg,
           timestamp: new Date(msg.timestamp),
@@ -87,6 +92,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           conv.id === id ? {
             ...conv,
             ...response,
+            status: response.status as 'active' | 'completed' | 'archived',
             messages: conv.messages,
             createdAt: new Date(response.createdAt),
             updatedAt: new Date(response.updatedAt),
@@ -131,6 +137,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         conversations: state.conversations.map(conv =>
           conv.id === conversationId ? {
             ...conv,
+            status: response.status as 'active' | 'completed' | 'archived',
             messages: response.messages.map(msg => ({
               ...msg,
               timestamp: new Date(msg.timestamp),
@@ -145,6 +152,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: async (conversationId: string, content: string, getAiResponse: boolean = true) => {
+    // Optimistically add user message immediately
+    const tempUserMessage: Message = {
+      id: `temp-user-${Date.now()}`,
+      conversationId,
+      role: 'user',
+      content,
+      timestamp: new Date(),
+      isPinned: false,
+      metadata: {},
+    };
+
+    // Add typing indicator if AI response is expected
+    const typingIndicator: Message | null = getAiResponse ? {
+      id: `temp-typing-${Date.now()}`,
+      conversationId,
+      role: 'assistant',
+      content: '...',
+      timestamp: new Date(),
+      isPinned: false,
+      metadata: { isTyping: true },
+    } : null;
+
+    // Immediately update UI with user message and typing indicator
+    set(state => ({
+      conversations: state.conversations.map(conv => {
+        if (conv.id === conversationId) {
+          const newMessages = [...conv.messages, tempUserMessage];
+          if (typingIndicator) {
+            newMessages.push(typingIndicator);
+          }
+          return {
+            ...conv,
+            messages: newMessages,
+            updatedAt: new Date(),
+          };
+        }
+        return conv;
+      }),
+    }));
+
     try {
       const response = await conversationApi.sendMessage(conversationId, content, getAiResponse);
       
@@ -162,12 +209,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
       
+      // Replace temp messages with real ones
       set(state => ({
         conversations: state.conversations.map(conv => {
           if (conv.id === conversationId) {
+            // Remove temp messages and add real ones
+            const filteredMessages = conv.messages.filter(
+              msg => !msg.id.startsWith('temp-')
+            );
             return {
               ...conv,
-              messages: [...conv.messages, ...messages],
+              messages: [...filteredMessages, ...messages],
               updatedAt: new Date(),
             };
           }
@@ -175,6 +227,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }),
       }));
     } catch (error) {
+      // Remove temp messages on error
+      set(state => ({
+        conversations: state.conversations.map(conv => {
+          if (conv.id === conversationId) {
+            return {
+              ...conv,
+              messages: conv.messages.filter(msg => !msg.id.startsWith('temp-')),
+            };
+          }
+          return conv;
+        }),
+      }));
       console.error('Failed to send message:', error);
       throw error;
     }
@@ -234,10 +298,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await conversationApi.injectMemory(conversationId, memoryId);
       set(state => ({
         conversations: state.conversations.map(conv => {
-          if (conv.id === conversationId && !conv.injectedMemories.includes(memoryId)) {
+          if (conv.id === conversationId && !conv.injectedMemories.some(m => m.id === memoryId)) {
             return {
               ...conv,
-              injectedMemories: [...conv.injectedMemories, memoryId],
+              injectedMemories: [...conv.injectedMemories, { id: memoryId, isActive: true }],
               updatedAt: new Date(),
             };
           }
@@ -258,7 +322,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           if (conv.id === conversationId) {
             return {
               ...conv,
-              injectedMemories: conv.injectedMemories.filter(id => id !== memoryId),
+              injectedMemories: conv.injectedMemories.filter(m => m.id !== memoryId),
               updatedAt: new Date(),
             };
           }
@@ -267,6 +331,57 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }));
     } catch (error) {
       console.error('Failed to remove injected memory:', error);
+      throw error;
+    }
+  },
+
+  toggleInjectedMemory: async (conversationId: string, memoryId: string) => {
+    try {
+      const result = await conversationApi.toggleInjectedMemory(conversationId, memoryId);
+      set(state => ({
+        conversations: state.conversations.map(conv => {
+          if (conv.id === conversationId) {
+            return {
+              ...conv,
+              injectedMemories: conv.injectedMemories.map(m =>
+                m.id === memoryId ? { ...m, isActive: result.isActive } : m
+              ),
+              updatedAt: new Date(),
+            };
+          }
+          return conv;
+        }),
+      }));
+    } catch (error) {
+      console.error('Failed to toggle injected memory:', error);
+      throw error;
+    }
+  },
+
+  closeConversation: async (conversationId: string) => {
+    try {
+      await conversationApi.closeConversation(conversationId);
+      set(state => ({
+        conversations: state.conversations.map(conv =>
+          conv.id === conversationId ? { ...conv, status: 'completed' as const } : conv
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to close conversation:', error);
+      throw error;
+    }
+  },
+
+  reopenConversation: async (conversationId: string) => {
+    try {
+      await conversationApi.reopenConversation(conversationId);
+      set(state => ({
+        conversations: state.conversations.map(conv =>
+          conv.id === conversationId ? { ...conv, status: 'active' as const } : conv
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to reopen conversation:', error);
       throw error;
     }
   },

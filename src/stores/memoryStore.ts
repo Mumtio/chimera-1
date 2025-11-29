@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Memory } from '../types';
 import { memoryApi } from '../lib/api';
+import { useWorkspaceStore } from './workspaceStore';
 
 interface MemoryState {
   memories: Memory[];
@@ -66,6 +67,17 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       };
       
       set(state => ({ memories: [...state.memories, newMemory] }));
+      
+      // Update workspace stats
+      const workspaceStore = useWorkspaceStore.getState();
+      const workspace = workspaceStore.getWorkspaceById(workspaceId);
+      if (workspace) {
+        workspaceStore.updateWorkspaceStats(workspaceId, {
+          totalMemories: workspace.stats.totalMemories + 1,
+          totalEmbeddings: workspace.stats.totalEmbeddings + 1,
+          lastActivity: new Date(),
+        });
+      }
     } catch (error) {
       console.error('Failed to add memory:', error);
       throw error;
@@ -98,11 +110,27 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
 
   deleteMemory: async (id: string) => {
     try {
+      // Get the memory before deleting to know its workspace
+      const memory = get().memories.find(mem => mem.id === id);
+      
       await memoryApi.delete(id);
       set(state => ({
         memories: state.memories.filter(mem => mem.id !== id),
         selectedMemoryId: state.selectedMemoryId === id ? null : state.selectedMemoryId,
       }));
+      
+      // Update workspace stats
+      if (memory) {
+        const workspaceStore = useWorkspaceStore.getState();
+        const workspace = workspaceStore.getWorkspaceById(memory.workspaceId);
+        if (workspace) {
+          workspaceStore.updateWorkspaceStats(memory.workspaceId, {
+            totalMemories: Math.max(0, workspace.stats.totalMemories - 1),
+            totalEmbeddings: Math.max(0, workspace.stats.totalEmbeddings - 1),
+            lastActivity: new Date(),
+          });
+        }
+      }
     } catch (error) {
       console.error('Failed to delete memory:', error);
       throw error;

@@ -8,15 +8,15 @@ interface IntegrationState {
   
   // Actions
   loadIntegrations: () => Promise<void>;
-  saveApiKey: (provider: 'openai' | 'anthropic' | 'google', apiKey: string) => Promise<void>;
-  testConnection: (provider: 'openai' | 'anthropic' | 'google') => Promise<boolean>;
-  disableIntegration: (provider: 'openai' | 'anthropic' | 'google') => Promise<void>;
-  updateIntegrationStatus: (provider: 'openai' | 'anthropic' | 'google', status: 'connected' | 'error' | 'disconnected', errorMessage?: string) => void;
+  saveApiKey: (provider: 'openai' | 'anthropic' | 'google' | 'deepseek', apiKey: string) => Promise<void>;
+  testConnection: (provider: 'openai' | 'anthropic' | 'google' | 'deepseek') => Promise<boolean>;
+  disableIntegration: (provider: 'openai' | 'anthropic' | 'google' | 'deepseek') => Promise<void>;
+  updateIntegrationStatus: (provider: 'openai' | 'anthropic' | 'google' | 'deepseek', status: 'connected' | 'error' | 'disconnected', errorMessage?: string) => void;
   
   // Selectors
-  getIntegrationByProvider: (provider: 'openai' | 'anthropic' | 'google') => Integration | undefined;
+  getIntegrationByProvider: (provider: 'openai' | 'anthropic' | 'google' | 'deepseek') => Integration | undefined;
   getConnectedModels: () => Promise<CognitiveModel[]>;
-  isProviderConnected: (provider: 'openai' | 'anthropic' | 'google') => boolean;
+  isProviderConnected: (provider: 'openai' | 'anthropic' | 'google' | 'deepseek') => boolean;
 }
 
 export const useIntegrationStore = create<IntegrationState>((set, get) => ({
@@ -152,6 +152,7 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
       const response = await integrationApi.getAvailableModels();
       return response.models.map(model => ({
         ...model,
+        provider: model.provider as 'openai' | 'anthropic' | 'google' | 'deepseek',
         status: model.status as 'connected' | 'error' | 'disconnected',
       }));
     } catch (error) {

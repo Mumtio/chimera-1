@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useIntegrationStore } from '../../stores/integrationStore';
 import { useAuthStore } from '../../stores/authStore';
+import { InvitationInbox } from '../features/InvitationInbox';
 
 export function TopBar() {
   const navigate = useNavigate();
@@ -70,6 +71,11 @@ export function TopBar() {
             </span>
           </div>
         </div>
+
+        <div className="h-8 w-px bg-neon-green/20" aria-hidden="true" />
+
+        {/* Invitation Inbox */}
+        <InvitationInbox />
 
         <div className="h-8 w-px bg-neon-green/20" aria-hidden="true" />
 

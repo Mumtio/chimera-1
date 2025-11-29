@@ -47,13 +47,18 @@ export interface Memory {
 }
 
 // Conversation Types
+export interface InjectedMemory {
+  id: string;
+  isActive: boolean;
+}
+
 export interface Conversation {
   id: string;
   workspaceId: string;
   title: string;
   modelId: string;
   messages: Message[];
-  injectedMemories: string[]; // Memory IDs
+  injectedMemories: InjectedMemory[]; // Memory IDs with active status
   status: 'active' | 'completed' | 'archived';
   createdAt: Date;
   updatedAt: Date;
@@ -72,7 +77,7 @@ export interface Message {
 // Cognitive Model Types
 export interface CognitiveModel {
   id: string;
-  provider: 'openai' | 'anthropic' | 'google';
+  provider: 'openai' | 'anthropic' | 'google' | 'deepseek';
   name: string;
   displayName: string;
   brainRegion: string; // e.g., "Left Cortex", "Right Cortex"
@@ -101,7 +106,7 @@ export interface TeamMember {
 export interface Integration {
   id: string;
   userId: string;
-  provider: 'openai' | 'anthropic' | 'google';
+  provider: 'openai' | 'anthropic' | 'google' | 'deepseek';
   apiKey: string;
   status: 'connected' | 'error' | 'disconnected';
   lastTested?: Date;

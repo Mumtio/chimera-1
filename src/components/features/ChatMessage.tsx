@@ -21,6 +21,7 @@ const ChatMessageComponent: React.FC<ChatMessageProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const isUser = message.role === 'user';
+  const isTyping = message.metadata?.isTyping === true;
 
   const formatTimestamp = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
@@ -38,7 +39,8 @@ const ChatMessageComponent: React.FC<ChatMessageProps> = ({
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      animate={{ opacity: 1, y: 0 }
+}
       exit={{ opacity: 0, x: -20 }}
       className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
       onMouseEnter={() => setIsHovered(true)}
@@ -76,13 +78,36 @@ const ChatMessageComponent: React.FC<ChatMessageProps> = ({
             whileHover={{ scale: 1.01 }}
           >
             <div className="text-sm leading-relaxed">
-              <MarkdownRenderer content={message.content} />
+              {isTyping ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">AI assistant is typing</span>
+                  <div className="flex gap-1">
+                    <motion.span
+                      className="w-2 h-2 bg-neon-green rounded-full"
+                      animate={{ opacity: [0.3, 1, 0.3] }}
+                      transition={{ duration: 1.5, repeat: Infinity, delay: 0 }}
+                    />
+                    <motion.span
+                      className="w-2 h-2 bg-neon-green rounded-full"
+                      animate={{ opacity: [0.3, 1, 0.3] }}
+                      transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
+                    />
+                    <motion.span
+                      className="w-2 h-2 bg-neon-green rounded-full"
+                      animate={{ opacity: [0.3, 1, 0.3] }}
+                      transition={{ duration: 1.5, repeat: Infinity, delay: 0.4 }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <MarkdownRenderer content={message.content} />
+              )}
             </div>
           </motion.div>
 
           {/* Action Menu */}
           <AnimatePresence>
-            {isHovered && showActions && (
+            {isHovered && showActions && !isTyping && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}

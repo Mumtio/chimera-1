@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Database, Cpu, Activity, Edit2, Check, X, MessageSquare, Plus } from 'lucide-react';
+import { Database, Activity, Edit2, Check, X, MessageSquare, Plus } from 'lucide-react';
 import { Container, StatCard, CyberButton, Grid, CyberCard } from '../components/ui';
 import { NeuralLoadGraph } from '../components/features/NeuralLoadGraph';
-import { ActivityFeed } from '../components/features/ActivityFeed';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useChatStore } from '../stores/chatStore';
-import { dummyNeuralLoadData, dummyActivities } from '../data/dummyData';
+import { workspaceApi } from '../lib/api';
+import type { TimeSeriesData } from '../types';
 
 export default function WorkspaceDashboard() {
   const { id } = useParams<{ id: string }>();
@@ -15,13 +15,52 @@ export default function WorkspaceDashboard() {
     state.workspaces.find(ws => ws.id === id)
   );
   const updateWorkspace = useWorkspaceStore(state => state.updateWorkspace);
-  const { getConversationsByWorkspace, createConversation } = useChatStore();
+  const { getConversationsByWorkspace } = useChatStore();
   const conversations = workspace ? getConversationsByWorkspace(workspace.id) : [];
   
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [editedDescription, setEditedDescription] = useState('');
+  const [neuralLoadData, setNeuralLoadData] = useState<TimeSeriesData[]>([]);
+
+  // Fetch neural load data from API
+  const fetchNeuralLoadData = () => {
+    if (id) {
+      workspaceApi.getDashboard(id)
+        .then((data) => {
+          const formattedData = data.neuralLoad.map((point) => ({
+            timestamp: new Date(point.timestamp),
+            value: point.value,
+          }));
+          setNeuralLoadData(formattedData);
+        })
+        .catch((err) => {
+          console.error('Failed to load neural load data:', err);
+        });
+    }
+  };
+
+  useEffect(() => {
+    fetchNeuralLoadData();
+  }, [id]);
+
+  // Record load snapshot every 5 minutes and refresh data
+  useEffect(() => {
+    if (!id) return;
+
+    const interval = setInterval(() => {
+      workspaceApi.recordLoad(id)
+        .then(() => {
+          fetchNeuralLoadData();
+        })
+        .catch((err) => {
+          console.error('Failed to record load snapshot:', err);
+        });
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [id]);
 
   const handleStartEditName = () => {
     setEditedName(workspace?.name || '');
@@ -166,19 +205,12 @@ export default function WorkspaceDashboard() {
           </div>
 
           {/* Stat Cards */}
-          <Grid cols={3} gap="lg" className="mb-8">
+          <Grid cols={2} gap="lg" className="mb-8">
             <StatCard
               label="Total Memories"
               value={stats.totalMemories}
               icon={Database}
               trend="up"
-              glowColor="#00FFAA"
-            />
-            <StatCard
-              label="Embeddings"
-              value={stats.totalEmbeddings.toLocaleString()}
-              icon={Cpu}
-              trend="neutral"
               glowColor="#00FFAA"
             />
             <StatCard
@@ -195,7 +227,7 @@ export default function WorkspaceDashboard() {
             {/* Left Column - Neural Load Graph */}
             <div className="lg:col-span-2">
               <NeuralLoadGraph 
-                data={dummyNeuralLoadData}
+                data={neuralLoadData}
                 height={300}
                 showGrid={true}
               />
@@ -302,10 +334,6 @@ export default function WorkspaceDashboard() {
             </CyberCard>
           </div>
 
-          {/* Activity Feed */}
-          <div className="mt-6">
-            <ActivityFeed activities={dummyActivities} maxItems={8} />
-          </div>
         </div>
       </Container>
     </div>

@@ -1,22 +1,20 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { UserPlus, MoreVertical, Shield, Eye, User, Circle } from 'lucide-react';
 import { CyberButton } from '../components/ui/CyberButton';
 import { CyberCard } from '../components/ui/CyberCard';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useAuthStore } from '../stores/authStore';
 import { dummyUsers } from '../data/dummyData';
+import { teamApi } from '../lib/api';
 import type { TeamMember } from '../types';
 
 const Team: React.FC = () => {
-  const navigate = useNavigate();
   const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
   const workspaces = useWorkspaceStore(state => state.workspaces);
   const currentUser = useAuthStore(state => state.user);
   
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'researcher' | 'observer'>('researcher');
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
 
   const currentWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
@@ -77,12 +75,24 @@ const Team: React.FC = () => {
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
 
-  const handleInvite = () => {
-    // In a real app, this would send an invitation
-    console.log('Inviting:', inviteEmail, 'as', inviteRole);
-    setShowInviteModal(false);
-    setInviteEmail('');
-    setInviteRole('researcher');
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccess, setInviteSuccess] = useState(false);
+
+  const handleInvite = async () => {
+    if (!activeWorkspaceId || !inviteEmail) return;
+    
+    setInviteError(null);
+    try {
+      await teamApi.invite(activeWorkspaceId, inviteEmail);
+      setInviteSuccess(true);
+      setTimeout(() => {
+        setShowInviteModal(false);
+        setInviteEmail('');
+        setInviteSuccess(false);
+      }, 1500);
+    } catch (error: any) {
+      setInviteError(error.message || 'Failed to send invitation');
+    }
   };
 
   const handleChangeRole = (memberId: string, newRole: TeamMember['role']) => {
@@ -215,7 +225,7 @@ const Team: React.FC = () => {
                       {/* Joined Date */}
                       <td className="py-4 px-4">
                         <span className="text-gray-400 text-sm font-mono">
-                          {member.joinedAt.toLocaleDateString('en-US', {
+                          {new Date(member.joinedAt).toLocaleDateString('en-US', {
                             year: 'numeric',
                             month: 'short',
                             day: 'numeric',
@@ -337,62 +347,64 @@ const Team: React.FC = () => {
           <div className="w-full max-w-md">
             <CyberCard title="Invite Researcher" glowBorder cornerAccents>
               <div className="space-y-4">
-                <div>
-                  <label className="block text-gray-400 text-xs mb-2 uppercase tracking-wider">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="researcher@chimera.lab"
-                    className="w-full px-4 py-3 bg-black border-2 border-deep-teal 
-                               text-neon-green font-mono text-sm
-                               focus:border-neon-green focus:shadow-neon focus:outline-none
-                               transition-all duration-300 angular-frame"
-                  />
-                </div>
+                {inviteSuccess ? (
+                  <div className="text-center py-4">
+                    <div className="text-neon-green text-lg mb-2">✓ Invitation Sent!</div>
+                    <p className="text-gray-400 text-sm">
+                      The user will see the invitation in their inbox.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-gray-400 text-xs mb-2 uppercase tracking-wider">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => {
+                          setInviteEmail(e.target.value);
+                          setInviteError(null);
+                        }}
+                        placeholder="researcher@chimera.lab"
+                        className="w-full px-4 py-3 bg-black border-2 border-deep-teal 
+                                   text-neon-green font-mono text-sm
+                                   focus:border-neon-green focus:shadow-neon focus:outline-none
+                                   transition-all duration-300 angular-frame"
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-gray-400 text-xs mb-2 uppercase tracking-wider">
-                    Role
-                  </label>
-                  <select
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value as TeamMember['role'])}
-                    className="w-full px-4 py-3 bg-black border-2 border-deep-teal 
-                               text-neon-green font-mono text-sm
-                               focus:border-neon-green focus:shadow-neon focus:outline-none
-                               transition-all duration-300 angular-frame cursor-pointer"
-                  >
-                    <option value="observer">Observer - View Only</option>
-                    <option value="researcher">Researcher - Full Access</option>
-                    <option value="admin">Admin - Full Control</option>
-                  </select>
-                </div>
+                    {inviteError && (
+                      <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded p-2">
+                        {inviteError}
+                      </div>
+                    )}
 
-                <div className="flex gap-4 mt-6">
-                  <CyberButton
-                    variant="primary"
-                    glow
-                    onClick={handleInvite}
-                    disabled={!inviteEmail}
-                    className="flex-1"
-                  >
-                    Send Invitation
-                  </CyberButton>
-                  <CyberButton
-                    variant="secondary"
-                    onClick={() => {
-                      setShowInviteModal(false);
-                      setInviteEmail('');
-                      setInviteRole('researcher');
-                    }}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </CyberButton>
-                </div>
+                    <div className="flex gap-4 mt-6">
+                      <CyberButton
+                        variant="primary"
+                        glow
+                        onClick={handleInvite}
+                        disabled={!inviteEmail}
+                        className="flex-1"
+                      >
+                        Send Invitation
+                      </CyberButton>
+                      <CyberButton
+                        variant="secondary"
+                        onClick={() => {
+                          setShowInviteModal(false);
+                          setInviteEmail('');
+                          setInviteError(null);
+                        }}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </CyberButton>
+                    </div>
+                  </>
+                )}
               </div>
             </CyberCard>
           </div>

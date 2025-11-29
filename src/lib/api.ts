@@ -23,9 +23,9 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = getAuthToken();
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string>),
   };
 
   if (token) {
@@ -153,11 +153,22 @@ export const workspaceApi = {
   }> => {
     return apiRequest(`/workspaces/${workspaceId}/dashboard`);
   },
+
+  recordLoad: async (workspaceId: string): Promise<{ currentLoad: number }> => {
+    return apiRequest(`/workspaces/${workspaceId}/record-load`, {
+      method: 'POST',
+    });
+  },
 };
 
 // ============================================
 // CONVERSATION API
 // ============================================
+
+export interface InjectedMemoryInfo {
+  id: string;
+  isActive: boolean;
+}
 
 export interface ConversationResponse {
   id: string;
@@ -165,7 +176,7 @@ export interface ConversationResponse {
   title: string;
   modelId: string;
   messages: MessageResponse[];
-  injectedMemories: string[];
+  injectedMemories: InjectedMemoryInfo[];
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -243,6 +254,24 @@ export const conversationApi = {
   removeInjectedMemory: async (conversationId: string, memoryId: string): Promise<void> => {
     return apiRequest(`/conversations/${conversationId}/inject-memory/${memoryId}`, {
       method: 'DELETE',
+    });
+  },
+
+  toggleInjectedMemory: async (conversationId: string, memoryId: string): Promise<{ memoryId: string; isActive: boolean }> => {
+    return apiRequest(`/conversations/${conversationId}/inject-memory/${memoryId}/toggle`, {
+      method: 'PUT',
+    });
+  },
+
+  closeConversation: async (conversationId: string): Promise<{ conversation: ConversationResponse; memory?: any }> => {
+    return apiRequest(`/conversations/${conversationId}/close`, {
+      method: 'POST',
+    });
+  },
+
+  reopenConversation: async (conversationId: string): Promise<{ conversation: ConversationResponse }> => {
+    return apiRequest(`/conversations/${conversationId}/reopen`, {
+      method: 'POST',
     });
   },
 };
@@ -330,7 +359,7 @@ export const memoryApi = {
 
 export interface IntegrationResponse {
   id: string;
-  provider: 'openai' | 'anthropic' | 'google';
+  provider: 'openai' | 'anthropic' | 'google' | 'deepseek';
   apiKey: string;
   status: 'connected' | 'error' | 'disconnected';
   lastTested?: string;
@@ -392,10 +421,10 @@ export const teamApi = {
     return apiRequest(`/workspaces/${workspaceId}/team`);
   },
 
-  invite: async (workspaceId: string, email: string, role: string): Promise<any> => {
+  invite: async (workspaceId: string, email: string): Promise<any> => {
     return apiRequest(`/workspaces/${workspaceId}/team/invite`, {
       method: 'POST',
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email }),
     });
   },
 
@@ -416,6 +445,38 @@ export const teamApi = {
   remove: async (workspaceId: string, userId: string): Promise<void> => {
     return apiRequest(`/workspaces/${workspaceId}/team/${userId}`, {
       method: 'DELETE',
+    });
+  },
+};
+
+// ============================================
+// INVITATION API
+// ============================================
+
+export interface InvitationResponse {
+  id: string;
+  workspaceId: string;
+  workspaceName: string;
+  inviterName: string;
+  inviterEmail: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+export const invitationApi = {
+  list: async (): Promise<{ invitations: InvitationResponse[]; total: number }> => {
+    return apiRequest('/invitations');
+  },
+
+  accept: async (invitationId: string): Promise<{ workspaceId: string; workspaceName: string }> => {
+    return apiRequest(`/invitations/${invitationId}/accept`, {
+      method: 'POST',
+    });
+  },
+
+  decline: async (invitationId: string): Promise<void> => {
+    return apiRequest(`/invitations/${invitationId}/decline`, {
+      method: 'POST',
     });
   },
 };
