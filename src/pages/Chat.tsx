@@ -240,9 +240,9 @@ const Chat: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <div className="flex h-full">
+      <div className="flex h-full overflow-hidden">
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
         {/* Conversation Header */}
         <div className="border-b-2 border-deep-teal bg-black/50 p-4">
           <div className="flex items-center justify-between">
@@ -333,10 +333,10 @@ const Chat: React.FC = () => {
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 min-h-0 bg-black/30 scanlines">
-          <div className="h-full overflow-y-auto p-6" style={{ scrollbarGutter: 'stable' }}>
+        <div className="flex-1 overflow-hidden bg-black/30 scanlines">
+          <div className="h-full overflow-y-auto p-6 custom-scrollbar flex flex-col">
             {conversation.messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
+              <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                   <Zap className="w-16 h-16 text-neon-green mx-auto mb-4 animate-pulse-glow" />
                   <p className="text-gray-400 text-lg">
@@ -348,7 +348,7 @@ const Chat: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col">
+              <div className="flex flex-col gap-4 min-h-full justify-end">
                 {conversation.messages.map((message) => (
                   <ChatMessage
                     key={message.id}
