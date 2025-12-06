@@ -7,7 +7,7 @@ This directory contains all the Zustand state management stores for the Chimera 
 ### authStore
 Manages user authentication state and actions.
 - **State**: user, isAuthenticated, isLoading
-- **Actions**: login, signup, logout, demoLogin
+- **Actions**: login, signup, logout
 
 ### workspaceStore
 Manages workspace data and workspace switching with transitions.

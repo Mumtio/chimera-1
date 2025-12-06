@@ -13,7 +13,6 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  demoLogin: () => void;
   clearError: () => void;
   clearAllData: () => void;
 }
@@ -138,17 +137,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         });
       });
     }
-  },
-
-  demoLogin: () => {
-    // For demo purposes - create a demo user without API call
-    const user: User = {
-      id: 'demo-user',
-      name: 'Demo User',
-      email: 'demo@chimera.lab',
-      createdAt: new Date(),
-    };
-    set({ user, isAuthenticated: true });
   },
 
   clearError: () => {
