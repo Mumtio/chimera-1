@@ -11,7 +11,7 @@ import { realtimeService } from '../lib/realtime';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, demoLogin, error, isAuthenticated } = useAuthStore();
+  const { login, error, isAuthenticated } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
@@ -82,12 +82,6 @@ export default function Login() {
     }
   };
 
-  const handleDemoAccess = () => {
-    demoLogin();
-    // Redirect to /app which will load workspaces and redirect to first one
-    navigate('/app');
-  };
-
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
       <Container maxWidth="md">
@@ -148,21 +142,6 @@ export default function Login() {
               className="w-full"
             >
               Establish Connection
-            </CyberButton>
-
-            <div className="flex items-center gap-4">
-              <div className="flex-1 h-px bg-deep-teal"></div>
-              <span className="text-gray-500 text-sm">OR</span>
-              <div className="flex-1 h-px bg-deep-teal"></div>
-            </div>
-
-            <CyberButton
-              variant="secondary"
-              size="lg"
-              onClick={handleDemoAccess}
-              className="w-full"
-            >
-              Demo Access
             </CyberButton>
 
             <div className="text-center">
